@@ -1,18 +1,17 @@
 import copy
 import json
-import sys
 from typing import Any, Dict, List, Tuple
 
 from cleo.helpers import option
 from poetry.console.commands.command import Command
 
 from poetry_audit_plugin import __version__
-from poetry_audit_plugin.constants import (
-    EXIT_CODE_OK,
-    EXIT_CODE_OPTION_INVALID,
-    EXIT_CODE_VULNERABILITY_FOUND,
+from poetry_audit_plugin.constants import EXIT_CODE_OK, EXIT_CODE_VULNERABILITY_FOUND
+from poetry_audit_plugin.errors import (
+    SafetyDBAccessError,
+    SafetyDBSessionBuildError,
+    ValidationError,
 )
-from poetry_audit_plugin.errors import SafetyDBAccessError, SafetyDBSessionBuildError
 from poetry_audit_plugin.safety import (
     Package,
     Vulnerability,
@@ -69,15 +68,29 @@ class AuditCommand(Command):
             value_required=False,
             default="0",
         ),
+        option(
+            long_name="db-path",
+            description="Path to a local or remote vulnerability database of Safety.",
+            flag=False,
+            value_required=False,
+            default=None,
+        ),
     ]
 
-    def handle(self) -> None:
+    def handle(self) -> int:
         self.is_quiet = self.option("json")
 
         self.line("<b># poetry audit report</b>")
         self.line("")
 
-        self.validate_options()
+        try:
+            self.validate_options()
+        except ValidationError as e:
+            self.chatty_line_error("<error>Command line option(s) are invalid</error>")
+            self.chatty_line_error("")
+            self.chatty_line_error(str(e))
+            return e.get_exit_code()
+
         self.validate_lock_file()
 
         self.line("<info>Loading...</info>")
@@ -101,19 +114,22 @@ class AuditCommand(Command):
                 proxy_port=int(self.option("proxy-port")) if self.option("proxy-port") else None,
             )
         except SafetyDBSessionBuildError as e:
-            self.chatty_line_error(f"<error>Error occured while building Safety DB session.</error>")
+            self.chatty_line_error("<error>Error occured while building Safety DB session.</error>")
             self.chatty_line_error("")
             self.chatty_line_error(str(e))
-            sys.exit(e.get_exit_code())
+            return e.get_exit_code()
         try:
             all_vulnerable_packages = check_vulnerable_packages(
-                session, packages, int(self.option("cache-sec")) if self.option("cache-sec") else 0
+                packages,
+                session,
+                int(self.option("cache-sec")) if self.option("cache-sec") else 0,
+                self.option("db-path"),
             )
         except SafetyDBAccessError as e:
-            self.chatty_line_error(f"<error>Error occured while accessing Safety DB.</error>")
+            self.chatty_line_error("<error>Error occured while accessing Safety DB.</error>")
             self.chatty_line_error("")
             self.chatty_line_error(str(e))
-            sys.exit(e.get_exit_code())
+            return e.get_exit_code()
 
         vulnerable_packages, amount_of_ignored_vulnerabilities = self.filter_vulnerable_packages(
             all_vulnerable_packages,
@@ -126,9 +142,9 @@ class AuditCommand(Command):
             json_report = self.get_json_report(vulnerable_packages)
             self.chatty_line(json_report)
             if amount_of_vulnerable_packages > 0:
-                sys.exit(EXIT_CODE_VULNERABILITY_FOUND)
+                return EXIT_CODE_VULNERABILITY_FOUND
             else:
-                sys.exit(EXIT_CODE_OK)
+                return EXIT_CODE_OK
         else:
             amount_of_vulnerabilities = 0
             for vulnerable_package in vulnerable_packages:
@@ -155,10 +171,10 @@ class AuditCommand(Command):
                 self.line(
                     f"<error>{amount_of_vulnerabilities}</error> <b>vulnerabilities found in {amount_of_vulnerable_packages} packages</b>"
                 )
-                sys.exit(EXIT_CODE_VULNERABILITY_FOUND)
+                return EXIT_CODE_VULNERABILITY_FOUND
             else:
                 self.line("<b>No vulnerabilities found</b> ✨✨")
-                sys.exit(EXIT_CODE_OK)
+                return EXIT_CODE_OK
 
     def line(self, *args: Any, **kwargs: Any) -> None:
         if not self.is_quiet:
@@ -189,10 +205,7 @@ class AuditCommand(Command):
             errors.append("cache-sec be number")
 
         if errors:
-            self.chatty_line_error("<error>Command line option(s) are invalid</error>")
-            for error in errors:
-                self.chatty_line_error(error)
-            sys.exit(EXIT_CODE_OPTION_INVALID)
+            raise ValidationError("\n".join(errors))
 
     def validate_lock_file(self) -> None:
         # Ref: https://github.com/python-poetry/poetry/blob/1.2.0b1/src/poetry/console/commands/export.py#L40

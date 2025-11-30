@@ -13,8 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [Ubuntu, macOS, Windows]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-        poetry-version: ["1.2.0", "1.3.0", "1.7.0", "1.8.0"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        poetry-version: ["2.0.0", "2.1.0", "2.2.0"]
         include:
           - os: Ubuntu
             image: ubuntu-latest
@@ -61,7 +61,7 @@ jobs:
         run: timeout 10s poetry run pip --version || rm -rf .venv
 
       - name: Install dependencies
-        run: poetry install
+        run: poetry install --with dev
 
       - name: Lint
         run: poetry run bash scripts/lint.sh
