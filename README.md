@@ -37,6 +37,10 @@ pip install poetry-audit-plugin
 
 * `--json`: Export the result in JSON format.
 
+```bash
+poetry audit --json
+```
+
 * `--ignore-code`: Ignore some vulnerabilities IDs. Receive a list of IDs. For example:
 
 ```bash
@@ -46,7 +50,7 @@ poetry audit --ignore-code=CVE-2022-42969,CVE-2020-10684
 * `--ignore-package`: Ignore some packages. Receive a list of packages. For example:
 
 ```bash
-poetry audit --json --ignore-package=py,ansible-tower-cli
+poetry audit --ignore-package=ansible-tower-cli
 ```
 
 * `--proxy-protocol`, `--proxy-host`, `--proxy-port`: Proxy to access Safety DB. For example:
@@ -59,6 +63,12 @@ poetry audit --proxy-protocol=http --proxy-host=localhost --proxy-port=3128
 
 ```bash
 poetry audit --cache-sec=60
+```
+
+* `--db`: Path to a local or remote vulnerability database of Safety. For example:
+
+```bash
+poetry audit --db=/path/to/safety.json
 ```
 
 ## Exit codes
@@ -75,17 +85,17 @@ You can read this document to setup an environment to develop poetry-audit-plugi
 
 First step is to install Poetry. Please read [official document](https://python-poetry.org/docs/) and install Poetry in your machine.
 
-Then, you can install dependencies of poetry-audit-plugin with the following command.
+Then, you can install dependencies of poetry-audit-plugin and activate the environment with the following command.
 
 ```sh
 poetry install
+source .venv/bin/activate
 ```
 
 Once you've done it, you can start developing poetry-audit-plugin. You can use test assets for the testing.
 
 ```sh
-cd tests/assets/no_vulnerabilities
-poetry shell
+cd tests/assets/no_vulnerabilities_project
 poetry audit
 ```
 
